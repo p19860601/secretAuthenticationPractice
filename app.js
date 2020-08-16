@@ -45,7 +45,9 @@ mongoose.connect("mongodb://localhost:27017/userDB");
 
 const userSchema = new mongoose.Schema({
     email: String,
-    password:String
+    password:String,
+    googleId:String,
+    secret:String
 });
 
 //enable passport-local-mongoose 
@@ -62,18 +64,30 @@ const User = new mongoose.model("User", userSchema);
 //deserialize crumbles the cookie, destroys it
 passport.use(User.createStrategy());
 
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+//passport not just local authorisation, allows 3rd party
+//will work for all kind of strategies
+passport.serializeUser(function(user, done) {
+    done(null, user.id);
+  });
+  
+  passport.deserializeUser(function(id, done) {
+    User.findById(id, function(err, user) {
+      done(err, user);
+    });
+  });
+
 
 //setting up Google authorisation
 passport.use(new GoogleStrategy({
     clientID: process.env.CLIENT_ID,
     clientSecret: process.env.CLIENT_SECRET,
-    callbackURL: "http://localhost:3000/auth/google/secrets",
+    callbackURL: "http://localhost:3000/auth/google/SecretPractice",
     userProfileURL: "https://www.googleapies.com/oauth2/v3/userinfo" 
   },
   //callback function
   function(accessToken, refreshToken, profile, cb) {
+
+    console.log(profile);
     User.findOrCreate({ googleId: profile.id }, function (err, user) {
       return cb(err, user);
     });
@@ -84,6 +98,18 @@ passport.use(new GoogleStrategy({
 app.get("/", function(req, res){
     res.render("home");
 });
+
+//for google
+app.get("/auth/google",
+  passport.authenticate("google", { scope: ["profile"] }));
+
+  app.get("/auth/google/SecretPractice", 
+  passport.authenticate("google", { failureRedirect: "/login" }),
+  function(req, res) {
+    // Successful authentication, redirect secrets.
+    res.redirect('/secrets');
+  });
+
 app.get("/login", function(req, res){
     res.render("login");
 });
@@ -93,11 +119,44 @@ app.get("/register", function(req, res){
 
 //creating a way to 'secrets' when cookie is enabled, without logging in again
  app.get("/secrets", function(req, res){
+    //no need to check authentication anymore
+    User.find({"secret":{$ne:null}}, function(err, foundUsers){
+        if(err){
+            console.log(err);
+        }else{
+            if (foundUsers){
+                res.render("secrets", {usersWithSecrets: foundUsers});
+            }
+        }
+    });
+ });
+
+ // submit page, submitting more secrets
+ app.get("/submit", function(req, res){
     if(req.isAuthenticated()){
-        res.render("secrets");
+        res.render("submit");
     }else{
-        res.redirect("login");
+        res.redirect("/login");
     }
+ });
+ app.post("/submit", function(req, res){
+    const submittedSecret = req.body.secret;
+
+    //find the user and save their secret in to their file
+     console.log(req.user.id);
+
+     User.findById(req.user.id, function(err, foundUser){
+         if(err){
+             console.log(err);
+         }else{
+             if(foundUser){
+                 foundUser.secret = submittedSecret;
+                 foundUser.save(function(){
+                     res.redirect("/secrets");
+                 });
+             }
+         }
+     });
  });
 
 //creating the logout button
