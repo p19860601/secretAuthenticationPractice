@@ -1,7 +1,9 @@
 //jshint esversion:6
 
-//Third Party OAuth2.0//Level 6 Authentication//
-//Open standard token based authorisation
+//Cookies and Session//Level 5 Authentication//
+//using Passport.authenticate('');
+//npm istalls we will ned are:
+//passport, passport-local, passport-local-mongoose, express-session
 
 
 require('dotenv').config(); //will be active and running//have to be on top!
@@ -15,8 +17,6 @@ const mongoose = require("mongoose");
 const session = require("express-session");
 const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const findOrCreate = require("mongoose-findorcreate");
 
 const app = express();
 
@@ -52,9 +52,6 @@ const userSchema = new mongoose.Schema({
 //hash and salt passwords and save our users to mongoDB
 userSchema.plugin(passportLocalMongoose);
 
-//enable findOrCreate for oAuth2.0
-userSchema.plugin(findOrCreate);
-
 const User = new mongoose.model("User", userSchema);
 
 //passport-local configuration
@@ -64,21 +61,6 @@ passport.use(User.createStrategy());
 
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
-
-//setting up Google authorisation
-passport.use(new GoogleStrategy({
-    clientID: process.env.CLIENT_ID,
-    clientSecret: process.env.CLIENT_SECRET,
-    callbackURL: "http://localhost:3000/auth/google/secrets",
-    userProfileURL: "https://www.googleapies.com/oauth2/v3/userinfo" 
-  },
-  //callback function
-  function(accessToken, refreshToken, profile, cb) {
-    User.findOrCreate({ googleId: profile.id }, function (err, user) {
-      return cb(err, user);
-    });
-  }
-));
 
 //view websites
 app.get("/", function(req, res){
